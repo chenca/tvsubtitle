@@ -1,0 +1,341 @@
+#! /usr/bin/python
+#  Copyright (c) 2012 Chenca
+
+# RELEASE NAME STRUCTURE:
+#
+# Spartacus . S02E05  .  PROPER . 720P    . HDTV  .  XviD  - 3LT0N . divx
+#
+# |   NAME  | EPISODE |  FLAG   | QUALITY | SOURCE | VCODEC | GROUP | EXTENSION
+#
+# NAME: anything
+# EPISODE: S\d\dE\d\d
+# QUALITY 720P, 1080P, 480P
+# FLAG REPACK, PROPER
+# SOURCE: HDTV, WEB-DLRip...
+# VCODEC: XviD x264
+# GROUP: various
+# EXTENSION: avi, mp4, mkv, divx
+# SEPARATORS: ' ', '.', '-', '_'
+
+import re, os, curl, sys
+from subprocess import *
+from tempfile import gettempdir, mktemp
+import zipfile, shutil
+
+USERNAME = ""
+PASSWD = ""
+
+UNRAR_CMD = "unrar"
+
+RE_SEP = "(\.|_| |\-)"
+RE_EXT = "(?P<extension>\.avi|\.mkv|\.mp4|\.divx|\.srt)"
+RE_EPI = "(?P<episode>S\d\dE\d\d(%s)*E\d\d|S\d\dE\d\d)" % RE_SEP
+RE_BASE = "(?P<show>.*)%s%s%s(?P<data>.*)%s" % (RE_SEP, RE_EPI, RE_SEP, RE_EXT)
+RE_SOURCE = "(?P<source>HDTV|WEB-DL|PDTV|DSR)"
+RE_QUALITY = "(?P<quality>480p|720p|1080p|)%s" % RE_SEP
+RE_DETAILS = "(?P<head>.*)%s(?P<tail>.*)" %  RE_SOURCE
+RE_GROUP = "%s(?P<group>\w*)%s*$" % (RE_SEP, RE_SEP)
+RE_CODEC = "%s(?P<codec>x264|xvid|h264)" % RE_SEP
+RE_TAIL = "%s%s" % (RE_CODEC, RE_GROUP)
+RE_FLAG = ".*%s(?P<flag>REPACK|PROPER).*" % RE_SEP
+RE_TOCLEAN = "(\(.*\)|\[.*\])"
+
+class TvShow:
+    def __init__(self, fname):
+        self.fname = fname
+        self.isTvShow = False
+        self.show = ""
+        self.episode = ""
+        self.quality = ""
+        self.source = ""
+        self.codec = ""
+        self.group = ""
+        self.flag = ""
+        self.extension = ""
+
+        self.parse()
+
+    def __str__(self):
+        return self.fname
+
+    def __repr__(self):
+        return self.fname
+
+    def __eq__(self, other):
+        if self.__class__ != other.__class__:
+            return False
+        if self.show.lower() != other.show.lower():
+            return False
+        if self.episode.lower() != other.episode.lower():
+            return False
+        if self.quality.lower() != other.quality.lower():
+            return False
+        if self.source.lower() != other.source.lower():
+            return False
+        if self.codec.lower() != other.codec.lower():
+            return False
+        if self.group.lower() != other.group.lower():
+            return False
+        if self.flag.lower() != other.flag.lower():
+            return False
+        return True
+
+    def subFilename(self):
+        if not self.isTvShow:
+            return None
+        subn = self.fname.replace(self.extension, ".srt")
+        return subn
+
+    def parse(self):
+        basename = os.path.basename(self.fname)
+        for trash in re.findall(RE_TOCLEAN, basename, re.I):
+            basename = basename.replace(trash, "")
+
+        match = re.match(RE_FLAG, basename, re.I)
+        flag = ""
+        if match:
+            flag = match.groups(1)
+            basename = basename.replace("".join(match.groups()), "")
+
+        match = re.match(RE_BASE, basename, re.I)
+        if not match:
+            return
+
+        base = match.groupdict()
+        match = re.match(RE_DETAILS, base['data'], re.I)
+        if not match:
+            return
+
+        details = match.groupdict()
+        match = re.match(RE_GROUP, details['tail'], re.I)
+        if not match:
+            match = re.match(RE_TAIL, details['tail'], re.I)
+            if match:
+                codec = match.groupdict()['codec']
+                group = match.groupdict()['group']
+            else:
+                return
+        else:
+            codec = ""
+            group = match.groupdict()['group']
+
+        if (details['head']):
+            match = re.match(RE_QUALITY, details['head'], re.I)
+            if match:
+                quality = match.groupdict()['quality']
+            else:
+                quality = ""
+        else:
+            quality = ""
+
+        self.show = adjust_separator(base['show'])
+        self.episode = base['episode']
+        self.extension = base['extension']
+        self.source = details['source']
+        self.quality = quality
+        self.codec = codec
+        self.group = group
+        self.flag = flag
+        self.isTvShow = True
+
+class LegendasTv:
+    RE_FIND = ".*gpop\((\'.*\')\)"
+    RE_MATCH = "\'(?P<name>.*)\',\'(?P<name_br>.*)\',\'(?P<episode>.*)\',\'(?P<disks>.*)\',\'(?P<fps>.*)\',\'(?P<size>.*)\',\'(?P<downloads>.*)\',\'<img.*abredown\(\'(?P<hash>\w*)\'"
+    def __init__(self, username, password):
+        self._curl = None
+        self._username = username
+        self._password = password
+        pass
+
+    def login(self):
+        try:
+            self._curl = curl.Curl('http://legendas.tv')
+            self._curl.set_verbosity(0)
+            self._curl.post("login_verificar.php",(("txtLogin", self._username),
+                                                   ("txtSenha", self._password)))
+            if "Bem vindo" in self._curl.body():
+                return True
+            else:
+                self._curl = None
+                return False
+        except:
+            print("Exception in login_legendas")
+            self._curl = None
+            return False
+
+    def search(self, name):
+        if not self._curl:
+            print("Login ERROR")
+            return []
+        try:
+            self._curl.post("index.php?opcao=buscarlegenda",
+                            (('txtLegenda', name), ('selTipo', 1), ('int_idioma', 1)))
+
+            data = self._curl.body()
+
+            entries = re.findall(LegendasTv.RE_FIND, data)
+            result = []
+            for entry in entries:
+                match = re.match(LegendasTv.RE_MATCH, entry, re.I)
+                if match:
+                    result.append(match.groupdict())
+
+            result = sorted(result, key = lambda entry : int(entry['downloads']))
+            result.reverse()
+            return result
+
+        except Exception, err:
+            print "Exception in search_subtitles", err
+            return []
+
+    def download(self, hashcode):
+        try:
+            self._curl.get('info.php?d=%s&c=1' % hashcode)
+            data = self._curl.body()
+
+            fname = mktemp()
+            out = open(fname, "wb")
+            out.write(data)
+            out.close()
+
+            result = None
+            url = self._curl.info()['effective-url']
+            if url.lower().endswith("zip"):
+                result = ZipExtractor(fname)
+            elif url.lower().endswith("rar"):
+                result = RarExtractor(fname)
+            else:
+                print "Unknown format file: %s" % url
+            return result
+
+        except Exception, err:
+            print "Exception in download_subtitle", err
+            return None
+
+def adjust_separator(param, sep="."):
+    result = param
+    for op in ['.', ' ', '-', '_']:
+        if op == sep:
+            continue
+        result = param.replace(op, sep)
+    return result
+
+def run_cmd(cmd):
+    pipe = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, close_fds=True)
+    pin, pout = (pipe.stdin, pipe.stdout)
+    result = pout.read().split("\n")
+    pout.close()
+    pin.close()
+    return result
+
+class ZipExtractor:
+    def __init__(self, filename):
+        self.fname = filename
+        self.zf = zipfile.ZipFile(self.fname)
+        namelist = self.zf.namelist()
+        self.entries = filter( lambda x : x.lower().endswith( '.srt' ), namelist)
+        self.entries.sort()
+
+    def extract(self, entry, destination):
+        out = open(destination, 'wb' )
+        out.write(self.zf.read(entry))
+        out.close()
+
+    def delete(self):
+        os.remove(self.fname)
+
+
+class RarExtractor:
+    def __init__(self, filename):
+        self.fname = filename
+        namelist = run_cmd("unrar vb %s" % filename)
+        self.entries = [name for name in namelist if name.lower().endswith(".srt")]
+        self.entries.sort()
+
+    def extract(self, entry, destination):
+        tmp = gettempdir()
+        cmd = '%s e -o+ "%s" "%s" "%s" >/dev/null' % (UNRAR_CMD, self.fname, entry, tmp)
+        os.system(cmd)
+        subtitle = os.path.basename(entry)
+        shutil.move(os.path.join(tmp, subtitle), destination)
+
+    def delete(self):
+        os.remove(self.fname)
+
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print "USAGE: tvsubtitle <path>"
+        sys.exit(-1)
+
+    if os.path.isdir(sys.argv[1]):
+        local = sys.argv[1]
+        directory = os.listdir(local)
+        directory.sort()
+    else:
+        local, video = os.path.split(sys.argv[1])
+        directory = [video]
+
+    files = [p for p in directory if re.match(".*(.mp4|.mkv|.avi|.divx)", p, re.I)]
+    shows = []
+    for f in files:
+        t = TvShow(f)
+        if not t.isTvShow:
+            continue
+        sub = os.path.join(local, t.subFilename())
+        if not os.path.exists(sub):
+            shows.append(t)
+
+    ltv = LegendasTv(USERNAME, PASSWD)
+    if not ltv.login():
+        sys.exit(-1)
+
+    for s in shows:
+        print "\nSEARCHING:", s.fname
+
+        results = ltv.search("%s.%s" % (s.show, s.episode))
+        if not len(results):
+            print "NO RESULTS FOUND FOR: %s.%s" % (s.show, s.episode)
+            continue
+        print "%d RESULTS FOUND" % len(results)
+
+        for r in results:
+            r['rank'] = 0
+            if s.quality in r['episode']:
+                r['rank'] += 1
+            if s.group in r['episode']:
+                r['rank'] += 5
+            if s.source in r['episode']:
+                r['rank'] += 1
+            if s.codec in r['episode']:
+                r['rank'] += 5
+            if s.flag in r['episode']:
+                r['rank'] += 5
+
+        ordered = sorted(results, key = lambda entry : int(entry['rank']))
+        ordered.reverse()
+
+        subtitleFound = False
+        for f in ordered:
+            print "CHECKING PACKAGE:", f['episode'], f['rank'], f['downloads']
+            z = ltv.download(f['hash'])
+            if not z:
+                print "DOWNLOAD ERROR"
+                break
+
+            sub = s.subFilename()
+            tsub = TvShow(sub)
+            for entry in z.entries:
+                tentry = TvShow(entry)
+                if tsub == tentry:
+                    print "PERFECT MATCH FOUND:", entry
+                    z.extract(entry, os.path.join(local, sub))
+                    subtitleFound = True
+                    break
+
+            z.delete()
+            if subtitleFound:
+                break
+        if not subtitleFound:
+            print "NO MATCH FOR", s.fname
