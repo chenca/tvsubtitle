@@ -94,7 +94,7 @@ class TvShow:
         match = re.match(RE_FLAG, basename, re.I)
         flag = ""
         if match:
-            flag = match.groups(1)
+            flag = match.groupdict()['flag']
             basename = basename.replace("".join(match.groups()), "")
 
         match = re.match(RE_BASE, basename, re.I)
