@@ -271,8 +271,8 @@ class RarExtractor:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print "USAGE: tvsubtitle <path>"
+    if len(sys.argv) != 3 and len(sys.argv) != 2:
+        print "USAGE: tvsubtitle <path> [destination]"
         sys.exit(-1)
 
     if os.path.isdir(sys.argv[1]):
@@ -282,6 +282,11 @@ if __name__ == "__main__":
     else:
         local, video = os.path.split(sys.argv[1])
         directory = [video]
+
+    if len(sys.argv) == 3:
+        destination = sys.argv[2]
+    else:
+        destination = None
 
     files = [p for p in directory if re.match(".*(.mp4|.mkv|.avi|.divx)", p, re.I)]
     shows = []
@@ -295,6 +300,7 @@ if __name__ == "__main__":
 
     ltv = LegendasTv(USERNAME, PASSWD)
     if not ltv.login():
+        print "Login ERROR"
         sys.exit(-1)
 
     for s in shows:
@@ -345,3 +351,11 @@ if __name__ == "__main__":
                 break
         if not subtitleFound:
             print "NO MATCH FOR", s.fname
+        elif destination:
+            print "MOVING FILES TO DESTINATION"
+            files = os.listdir(local)
+            n = len(s.extension)
+            base = s.fname[:-n]
+            for g in files:
+                if g.startswith(base):
+                    shutil.move(os.path.join(local,g), destination)
