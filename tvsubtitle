@@ -29,7 +29,7 @@ UNRAR_CMD = "unrar"
 
 RE_SEP = "(\.|_| |\-)"
 RE_EXT = "(?P<extension>\.avi|\.mkv|\.mp4|\.divx|\.srt)"
-RE_EPI = "(?P<episode>S\d\dE\d\d(%s)*E\d\d|S\d\dE\d\d)" % RE_SEP
+RE_EPI = "(?P<episode>S\d\dE\d\d(%s)*E\d\d|S\d\dE\d\d|\d*\d\d\d)" % RE_SEP
 RE_BASE = "(?P<show>.*)%s%s%s(?P<data>.*)%s" % (RE_SEP, RE_EPI, RE_SEP, RE_EXT)
 RE_SOURCE = "(?P<source>HDTV|WEB-DL|PDTV|DSR)"
 RE_QUALITY = "(?P<quality>480p|720p|1080p|)%s" % RE_SEP
@@ -54,6 +54,12 @@ class TvShow:
         self.extension = ""
 
         self.parse()
+
+    def setEpisode(self, epi):
+        if re.match("\d*\d\d\d", epi):
+            self.episode = "S%sE%s" % (epi[:-2], epi[-2:])
+        else:
+            self.episode = epi
 
     def __str__(self):
         return self.fname
@@ -129,7 +135,7 @@ class TvShow:
             quality = ""
 
         self.show = adjust_separator(base['show'])
-        self.episode = base['episode']
+        self.setEpisode(base['episode'])
         self.extension = base['extension']
         self.source = details['source']
         self.quality = quality
