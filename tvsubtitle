@@ -22,10 +22,12 @@ from subprocess import *
 from tempfile import gettempdir, mktemp
 import zipfile, shutil
 
-USERNAME = ""
-PASSWD = ""
 
-UNRAR_CMD = "unrar"
+LANGS = {"PT_BR" : 1, "PT_PT" : 10, "EN_EN" : 2, "ES_ES" : 3, "ALL" : 99}
+OPTIONS = { "USERNAME" : "",
+            "PASSWD" :  "",
+            "UNRAR_CMD" : "unrar",
+            "LANGUAGE" : LANGS['PT_BR']}
 
 RE_SEP = "(\.|_| |\-)"
 RE_EXT = "(?P<extension>\.avi|\.mkv|\.mp4|\.divx|\.srt)"
@@ -175,7 +177,7 @@ class LegendasTv:
             return []
         try:
             self._curl.post("index.php?opcao=buscarlegenda",
-                            (('txtLegenda', name), ('selTipo', 1), ('int_idioma', 1)))
+                            (('txtLegenda', name), ('selTipo', 1), ('int_idioma', OPTIONS['LANGUAGE'])))
 
             data = self._curl.body()
 
@@ -260,7 +262,7 @@ class RarExtractor:
 
     def extract(self, entry, destination):
         tmp = gettempdir()
-        cmd = '%s e -o+ "%s" "%s" "%s" >/dev/null' % (UNRAR_CMD, self.fname, entry, tmp)
+        cmd = '%s e -o+ "%s" "%s" "%s" >/dev/null' % (OPTIONS['UNRAR_CMD'], self.fname, entry, tmp)
         os.system(cmd)
         subtitle = os.path.basename(entry)
         shutil.move(os.path.join(tmp, subtitle), destination)
@@ -268,7 +270,30 @@ class RarExtractor:
     def delete(self):
         os.remove(self.fname)
 
+def loadOptions():
+    import os.path as path
+    import ConfigParser as cfg
 
+    userconf = path.join(path.expanduser("~"), ".tvsubtitle")
+    systemconf = path.join(os.getcwd(), "tvsubtitle.conf")
+
+    cfgfile = None
+    if path.exists(userconf):
+        cfgfile = userconf
+    elif path.exists(systemconf):
+        cfgfile = systemconf
+
+
+    if not cfgfile:
+        return
+
+    config = cfg.SafeConfigParser(OPTIONS)
+    config.read(cfgfile)
+
+    OPTIONS['USERNAME'] = config.get('TVSUBTITLE', 'USERNAME')
+    OPTIONS['PASSWD'] = config.get('TVSUBTITLE', 'PASSWD')
+    OPTIONS['UNRAR_CMD'] = config.get('TVSUBTITLE', "UNRAR_CMD")
+    OPTIONS['LANGUAGE'] = LANGS[config.get('TVSUBTITLE', "LANGUAGE")]
 
 if __name__ == "__main__":
     if len(sys.argv) != 3 and len(sys.argv) != 2:
@@ -298,7 +323,9 @@ if __name__ == "__main__":
         if not os.path.exists(sub):
             shows.append(t)
 
-    ltv = LegendasTv(USERNAME, PASSWD)
+    loadOptions()
+
+    ltv = LegendasTv(OPTIONS['USERNAME'], OPTIONS['PASSWD'])
     if not ltv.login():
         print "Login ERROR"
         sys.exit(-1)
