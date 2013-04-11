@@ -32,7 +32,7 @@ OPTIONS = { "USERNAME" : "",
 RE_SEP = "(\.|_| |\-)"
 RE_EXT = "(?P<extension>\.avi|\.mkv|\.mp4|\.divx|\.srt)"
 RE_EPI = "(?P<episode>S\d\dE\d\d(%s)*E\d\d|S\d\dE\d\d|\d*\d\d\d)" % RE_SEP
-RE_BASE = "(?P<show>.*)%s%s%s(?P<data>.*)%s" % (RE_SEP, RE_EPI, RE_SEP, RE_EXT)
+RE_BASE = "(?P<show>.*)%s%s%s(?P<data>.*)%s$" % (RE_SEP, RE_EPI, RE_SEP, RE_EXT)
 RE_SOURCE = "(?P<source>HDTV|WEB-DL|PDTV|DSR)"
 RE_QUALITY = "(?P<quality>480p|720p|1080p|)%s" % RE_SEP
 RE_DETAILS = "(?P<head>.*)%s(?P<tail>.*)" %  RE_SOURCE
@@ -274,8 +274,11 @@ def loadOptions():
     import os.path as path
     import ConfigParser as cfg
 
-    userconf = path.join(path.expanduser("~"), ".tvsubtitle")
-    systemconf = path.join(os.getcwd(), "tvsubtitle.conf")
+    basedir = path.dirname(os.path.realpath(__file__))
+    userdir = path.expanduser("~")
+
+    userconf = path.join(userdir, ".tvsubtitle")
+    systemconf = path.join(basedir, "tvsubtitle.conf")
 
     cfgfile = None
     if path.exists(userconf):
