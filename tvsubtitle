@@ -17,9 +17,10 @@
 # EXTENSION: avi, mp4, mkv, divx
 # SEPARATORS: ' ', '.', '-', '_'
 
-import re, os, curl, sys
+import re, os, sys
 from subprocess import *
 from tempfile import gettempdir, mktemp
+from curl import Curl
 import zipfile, shutil
 
 
@@ -69,24 +70,28 @@ class TvShow:
     def __repr__(self):
         return self.fname
 
-    def __eq__(self, other):
+    def compare(self, other):
+        score = 0
         if self.__class__ != other.__class__:
-            return False
+            score += 10
         if self.show.lower() != other.show.lower():
-            return False
+            score += 10
         if self.episode.lower() != other.episode.lower():
-            return False
+            score += 10
         if self.quality.lower() != other.quality.lower():
-            return False
+            score += 1
         if self.source.lower() != other.source.lower():
-            return False
+            score += 10
         if self.codec.lower() != other.codec.lower():
-            return False
+            score += 1
         if self.group.lower() != other.group.lower():
-            return False
+            score += 10
         if self.flag.lower() != other.flag.lower():
-            return False
-        return True
+            score += 5
+        return score
+
+    def __eq__(self, other):
+        return self.compare(other) == 0
 
     def subFilename(self):
         if not self.isTvShow:
@@ -147,46 +152,34 @@ class TvShow:
         self.isTvShow = True
 
 class LegendasTv:
-    RE_FIND = ".*gpop\((\'.*\')\)"
-    RE_MATCH = "\'(?P<name>.*)\',\'(?P<name_br>.*)\',\'(?P<episode>.*)\',\'(?P<disks>.*)\',\'(?P<fps>.*)\',\'(?P<size>.*)\',\'(?P<downloads>.*)\',\'<img.*abredown\(\'(?P<hash>\w*)\'"
-    def __init__(self, username, password):
-        self._curl = None
-        self._username = username
-        self._password = password
-        pass
+    SEARCH_URL = "http://legendas.tv/util/carrega_legendas_busca/id_idioma:%s/termo:"
+    DOWNLOAD_URL = "http://legendas.tv/downloadarquivo/"
+    RE_FIND_HASH = ".*/download/.*"
+    RE_MATCH_HASH = ".*/download/([^/]*)/.*"
+    RE_MATCH_DOWNLOADS = ".*[^\d]+(\d+) downloads.*"
+    RE_MATCH_NAME = ".*/download/[^>]*>([^<]*)</a>.*"
+    RE_FIND_REMOTE_NAME = '.*filename="[^\.]*([^"]+).*'
 
-    def login(self):
-        try:
-            self._curl = curl.Curl('http://legendas.tv')
-            self._curl.set_verbosity(0)
-            self._curl.post("login_verificar.php",(("txtLogin", self._username),
-                                                   ("txtSenha", self._password)))
-            if "Bem vindo" in self._curl.body():
-                return True
-            else:
-                self._curl = None
-                return False
-        except:
-            print("Exception in login_legendas")
-            self._curl = None
-            return False
+    def __init__(self, lang):
+        self.lang = lang
 
     def search(self, name):
-        if not self._curl:
-            print("Login ERROR")
-            return []
         try:
-            self._curl.post("index.php?opcao=buscarlegenda",
-                            (('txtLegenda', name), ('selTipo', 1), ('int_idioma', OPTIONS['LANGUAGE'])))
+            curl = Curl((LegendasTv.SEARCH_URL % self.lang) + name)
+            data = curl.get()
 
-            data = self._curl.body()
-
-            entries = re.findall(LegendasTv.RE_FIND, data)
+            entries = re.findall(LegendasTv.RE_FIND_HASH, data)
             result = []
             for entry in entries:
-                match = re.match(LegendasTv.RE_MATCH, entry, re.I)
-                if match:
-                    result.append(match.groupdict())
+                hashcode = re.match(LegendasTv.RE_MATCH_HASH, entry, re.I)
+                name = re.match(LegendasTv.RE_MATCH_NAME, entry, re.I)
+                downloads = re.match(LegendasTv.RE_MATCH_DOWNLOADS, entry, re.I)
+
+                if hashcode and downloads and name:
+                    res = {'name': name.groups()[0],
+                           'downloads': downloads.groups()[0],
+                           'hashcode': hashcode.groups()[0]}
+                    result.append(res)
 
             result = sorted(result, key = lambda entry : int(entry['downloads']))
             result.reverse()
@@ -198,8 +191,8 @@ class LegendasTv:
 
     def download(self, hashcode):
         try:
-            self._curl.get('info.php?d=%s&c=1' % hashcode)
-            data = self._curl.body()
+            curl = Curl(LegendasTv.DOWNLOAD_URL + hashcode)
+            data = curl.get()
 
             fname = mktemp()
             out = open(fname, "wb")
@@ -207,7 +200,7 @@ class LegendasTv:
             out.close()
 
             result = None
-            url = self._curl.info()['effective-url']
+            url = re.findall(LegendasTv.RE_FIND_REMOTE_NAME, curl.header(), re.I)[0]
             if url.lower().endswith("zip"):
                 result = ZipExtractor(fname)
             elif url.lower().endswith("rar"):
@@ -298,6 +291,12 @@ def loadOptions():
     OPTIONS['UNRAR_CMD'] = config.get('TVSUBTITLE', "UNRAR_CMD")
     OPTIONS['LANGUAGE'] = LANGS[config.get('TVSUBTITLE', "LANGUAGE")]
 
+def clean_name(name):
+    n = name
+    for sep in ['.','_',' ','-']:
+        n = name.replace(sep, "%20")
+    return n
+
 if __name__ == "__main__":
     if len(sys.argv) != 3 and len(sys.argv) != 2:
         print "USAGE: tvsubtitle <path> [destination]"
@@ -328,40 +327,21 @@ if __name__ == "__main__":
 
     loadOptions()
 
-    ltv = LegendasTv(OPTIONS['USERNAME'], OPTIONS['PASSWD'])
-    if not ltv.login():
-        print "Login ERROR"
-        sys.exit(-1)
+    ltv = LegendasTv(OPTIONS['LANGUAGE'])
 
     for s in shows:
         print "\nSEARCHING:", s.fname
 
-        results = ltv.search("%s.%s" % (s.show, s.episode))
+        results = ltv.search(clean_name(s.show) + "%20" + s.episode)
         if not len(results):
             print "NO RESULTS FOUND FOR: %s.%s" % (s.show, s.episode)
             continue
         print "%d RESULTS FOUND" % len(results)
 
-        for r in results:
-            r['rank'] = 0
-            if s.quality in r['episode']:
-                r['rank'] += 1
-            if s.group in r['episode']:
-                r['rank'] += 5
-            if s.source in r['episode']:
-                r['rank'] += 1
-            if s.codec in r['episode']:
-                r['rank'] += 5
-            if s.flag in r['episode']:
-                r['rank'] += 5
-
-        ordered = sorted(results, key = lambda entry : int(entry['rank']))
-        ordered.reverse()
-
         subtitleFound = False
-        for f in ordered:
-            print "CHECKING PACKAGE:", f['episode'], f['rank'], f['downloads']
-            z = ltv.download(f['hash'])
+        for f in results:
+            print "CHECKING PACKAGE:", f['name'], f['downloads']
+            z = ltv.download(f['hashcode'])
             if not z:
                 print "DOWNLOAD ERROR"
                 break
@@ -375,10 +355,15 @@ if __name__ == "__main__":
                     z.extract(entry, os.path.join(local, sub))
                     subtitleFound = True
                     break
-
+                elif tsub.compare(tentry) <= 5:
+                    print "REASONABLE MATCH FOUND:", entry
+                    z.extract(entry, os.path.join(local, sub))
+                    subtitleFound = True
+                    break
             z.delete()
             if subtitleFound:
                 break
+
         if not subtitleFound:
             print "NO MATCH FOR", s.fname
         elif destination:
