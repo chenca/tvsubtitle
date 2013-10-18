@@ -25,9 +25,7 @@ import zipfile, shutil
 
 
 LANGS = {"PT_BR" : 1, "PT_PT" : 10, "EN_EN" : 2, "ES_ES" : 3, "ALL" : 99}
-OPTIONS = { "USERNAME" : "",
-            "PASSWD" :  "",
-            "UNRAR_CMD" : "unrar",
+OPTIONS = { "UNRAR_CMD" : "unrar",
             "LANGUAGE" : LANGS['PT_BR']}
 
 RE_SEP = "(\.|_| |\-)"
@@ -286,8 +284,6 @@ def loadOptions():
     config = cfg.SafeConfigParser(OPTIONS)
     config.read(cfgfile)
 
-    OPTIONS['USERNAME'] = config.get('TVSUBTITLE', 'USERNAME')
-    OPTIONS['PASSWD'] = config.get('TVSUBTITLE', 'PASSWD')
     OPTIONS['UNRAR_CMD'] = config.get('TVSUBTITLE', "UNRAR_CMD")
     OPTIONS['LANGUAGE'] = LANGS[config.get('TVSUBTITLE', "LANGUAGE")]
 
