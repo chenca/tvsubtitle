@@ -150,8 +150,8 @@ class TvShow:
         self.isTvShow = True
 
 class LegendasTv:
-    SEARCH_URL = "http://legendas.tv/util/carrega_legendas_busca/id_idioma:%s/termo:"
-    DOWNLOAD_URL = "http://legendas.tv/downloadarquivo/"
+    SEARCH_URL = "util/carrega_legendas_busca/id_idioma:%s/termo:"
+    DOWNLOAD_URL = "downloadarquivo/"
     RE_FIND_HASH = ".*/download/.*"
     RE_MATCH_HASH = ".*/download/([^/]*)/.*"
     RE_MATCH_DOWNLOADS = ".*[^\d]+(\d+) downloads.*"
@@ -159,12 +159,12 @@ class LegendasTv:
     RE_FIND_REMOTE_NAME = '.*filename="[^\.]*([^"]+).*'
 
     def __init__(self, lang):
+        self.curl = Curl("http://legendas.tv/")
         self.lang = lang
 
     def search(self, name):
         try:
-            curl = Curl((LegendasTv.SEARCH_URL % self.lang) + name)
-            data = curl.get()
+            data = self.curl.get((LegendasTv.SEARCH_URL % self.lang) + name)
 
             entries = re.findall(LegendasTv.RE_FIND_HASH, data)
             result = []
@@ -189,8 +189,7 @@ class LegendasTv:
 
     def download(self, hashcode):
         try:
-            curl = Curl(LegendasTv.DOWNLOAD_URL + hashcode)
-            data = curl.get()
+            data = self.curl.get(LegendasTv.DOWNLOAD_URL + hashcode)
 
             fname = mktemp()
             out = open(fname, "wb")
@@ -198,7 +197,7 @@ class LegendasTv:
             out.close()
 
             result = None
-            url = re.findall(LegendasTv.RE_FIND_REMOTE_NAME, curl.header(), re.I)[0]
+            url = re.findall(LegendasTv.RE_FIND_REMOTE_NAME, self.curl.header(), re.I)[0]
             if url.lower().endswith("zip"):
                 result = ZipExtractor(fname)
             elif url.lower().endswith("rar"):
