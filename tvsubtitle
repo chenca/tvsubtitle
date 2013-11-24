@@ -293,9 +293,14 @@ def clean_name(name):
     return n
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3 and len(sys.argv) != 2:
-        print "USAGE: tvsubtitle <path> [destination]"
+    MANUAL_MATCH = False
+    if len(sys.argv) < 2 or len(sys.argv) > 4:
+        print "USAGE: tvsubtitle <path> [destination] [-m for manual match]"
         sys.exit(-1)
+
+    if "-m" in sys.argv:
+        MANUAL_MATCH = True
+        sys.argv.remove("-m")
 
     if os.path.isdir(sys.argv[1]):
         local = sys.argv[1]
@@ -355,6 +360,25 @@ if __name__ == "__main__":
                     z.extract(entry, os.path.join(local, sub))
                     subtitleFound = True
                     break
+
+            if not subtitleFound and MANUAL_MATCH:
+                print "MANUAL MATCH:", sub
+                while True:
+                    for i in range(len(z.entries)):
+                        print "(%d) %s" % (i+1, z.entries[i])
+                    print "(0) NEXT RESULT"
+                    try:
+                        choice = int(raw_input())
+                        if choice >= 0 and choice <= len(z.entries):
+                            break
+                    except: pass
+                    print "INVALID OPTION"
+
+                if choice > 0:
+                    entry = z.entries[choice - 1]
+                    z.extract(entry, os.path.join(local, sub))
+                    subtitleFound = True
+
             z.delete()
             if subtitleFound:
                 break
