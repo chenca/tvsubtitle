@@ -152,7 +152,7 @@ class TvShow:
 class LegendasTv:
     SEARCH_URL = "util/carrega_legendas_busca/id_idioma:%s/termo:"
     DOWNLOAD_URL = "downloadarquivo/"
-    RE_FIND_HASH = ".*/download/.*"
+    RE_FIND_HASH = '<p><a href="/download/.*?<p class="data">.*?</p>'
     RE_MATCH_HASH = ".*/download/([^/]*)/.*"
     RE_MATCH_DOWNLOADS = ".*[^\d]+(\d+) downloads.*"
     RE_MATCH_NAME = ".*/download/[^>]*>([^<]*)</a>.*"
