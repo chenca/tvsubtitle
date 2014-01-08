@@ -30,10 +30,10 @@ OPTIONS = { "UNRAR_CMD" : "unrar",
 
 RE_SEP = "(\.|_| |\-)"
 RE_EXT = "(?P<extension>\.avi|\.mkv|\.mp4|\.divx|\.srt)"
-RE_EPI = "(?P<episode>S\d\dE\d\d(%s)*E\d\d|S\d\dE\d\d|\d*\d\d\d)" % RE_SEP
+RE_EPI = "(?P<episode>S\d\dE\d\d(%s)*E\d\d|S\d\dE\d\d|\d*\d\d\d|\d+x\d+)" % RE_SEP
 RE_BASE = "(?P<show>.*)%s%s%s(?P<data>.*)%s$" % (RE_SEP, RE_EPI, RE_SEP, RE_EXT)
 RE_SOURCE = "(?P<source>HDTV|WEBRip|WEB-DL|PDTV|DSR)"
-RE_QUALITY = "(?P<quality>480p|720p|1080p|)%s" % RE_SEP
+RE_QUALITY = "((.+)%s|)(?P<quality>480p|720p|1080p|)%s" % (RE_SEP, RE_SEP)
 RE_DETAILS = "(?P<head>.*)%s(?P<tail>.*)" %  RE_SOURCE
 RE_GROUP = "%s(?P<group>\w*)%s*$" % (RE_SEP, RE_SEP)
 RE_CODEC = "%s(?P<codec>x264|xvid|h264)" % RE_SEP
@@ -59,6 +59,9 @@ class TvShow:
     def setEpisode(self, epi):
         if re.match("\d*\d\d\d", epi):
             self.episode = "S%sE%s" % (epi[:-2], epi[-2:])
+        elif re.match("\d+x\d+", epi, re.I):
+            s,e = epi.lower().split("x")
+            self.episode = "S%02dE%02d" % (int(s), int(e))
         else:
             self.episode = epi
 
@@ -348,20 +351,24 @@ if __name__ == "__main__":
 
             sub = s.subFilename()
             tsub = TvShow(sub)
-            for entry in z.entries:
-                tentry = TvShow(entry)
-                if tsub == tentry:
-                    print "PERFECT MATCH FOUND:", entry
-                    z.extract(entry, os.path.join(local, sub))
-                    subtitleFound = True
-                    break
-                elif tsub.compare(tentry) <= 5:
-                    print "REASONABLE MATCH FOUND:", entry
-                    z.extract(entry, os.path.join(local, sub))
-                    subtitleFound = True
-                    break
 
-            if not subtitleFound and MANUAL_MATCH:
+            if not MANUAL_MATCH:
+                for entry in z.entries:
+                    tentry = TvShow(entry)
+                    if tsub == tentry:
+                        print "PERFECT MATCH FOUND:", entry
+                        z.extract(entry, os.path.join(local, sub))
+                        subtitleFound = True
+                        break
+                if not subtitleFound:
+                    for entry in z.entries:
+                        tentry = TvShow(entry)
+                        if tsub.compare(tentry) <= 5:
+                            print "REASONABLE MATCH FOUND:", entry
+                            z.extract(entry, os.path.join(local, sub))
+                            subtitleFound = True
+                            break
+            else:
                 print "MANUAL MATCH:", sub
                 while True:
                     for i in range(len(z.entries)):
