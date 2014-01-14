@@ -412,4 +412,5 @@ if __name__ == "__main__":
             base = s.fname[:-n]
             for g in files:
                 if g.startswith(base):
-                    shutil.move(os.path.join(local,g), destination)
+                    shutil.copyfile(os.path.join(local,g), destination)
+                    os.remove(os.path.join(local,g))
