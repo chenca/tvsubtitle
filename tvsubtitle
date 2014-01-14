@@ -295,6 +295,26 @@ def clean_name(name):
         n = name.replace(sep, "%20")
     return n
 
+def listFiles(path):
+    ret = []
+    if not os.path.isdir(path):
+        local, video = os.path.split(path)
+        if re.match(".*(.mp4|.mkv|.avi|.divx)", video, re.I):
+            return [(video, local)]
+        else:
+            return []
+    else:
+        local = path
+        directory = os.listdir(local)
+        directory.sort()
+        for p in directory:
+            if re.match(".*(.mp4|.mkv|.avi|.divx)", p, re.I):
+                ret.append((p, local))
+            elif os.path.isdir(p):
+                ret = ret + listFiles(os.path.join(local,p))
+        return ret
+
+
 if __name__ == "__main__":
     MANUAL_MATCH = False
     if len(sys.argv) < 2 or len(sys.argv) > 4:
@@ -305,34 +325,27 @@ if __name__ == "__main__":
         MANUAL_MATCH = True
         sys.argv.remove("-m")
 
-    if os.path.isdir(sys.argv[1]):
-        local = sys.argv[1]
-        directory = os.listdir(local)
-        directory.sort()
-    else:
-        local, video = os.path.split(sys.argv[1])
-        directory = [video]
+    files = listFiles(sys.argv[1])
 
     if len(sys.argv) == 3:
         destination = sys.argv[2]
     else:
         destination = None
 
-    files = [p for p in directory if re.match(".*(.mp4|.mkv|.avi|.divx)", p, re.I)]
     shows = []
-    for f in files:
+    for f,local in files:
         t = TvShow(f)
         if not t.isTvShow:
             continue
         sub = os.path.join(local, t.subFilename())
         if not os.path.exists(sub):
-            shows.append(t)
+            shows.append((t, local))
 
     loadOptions()
 
     ltv = LegendasTv(OPTIONS['LANGUAGE'])
 
-    for s in shows:
+    for s,local in shows:
         print "\nSEARCHING:", s.fname
 
         results = ltv.search(clean_name(s.show) + "%20" + s.episode)
