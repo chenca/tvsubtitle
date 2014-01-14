@@ -258,7 +258,8 @@ class RarExtractor:
         cmd = '%s e -o+ "%s" "%s" "%s" >/dev/null' % (OPTIONS['UNRAR_CMD'], self.fname, entry, tmp)
         os.system(cmd)
         subtitle = os.path.basename(entry)
-        shutil.move(os.path.join(tmp, subtitle), destination)
+        shutil.copyfile(os.path.join(tmp, subtitle), destination)
+        os.remove(os.path.join(tmp, subtitle))
 
     def delete(self):
         os.remove(self.fname)
