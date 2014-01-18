@@ -326,7 +326,8 @@ if __name__ == "__main__":
         MANUAL_MATCH = True
         sys.argv.remove("-m")
 
-    files = listFiles(sys.argv[1])
+    basepath = sys.argv[1]
+    files = listFiles(basepath)
 
     if len(sys.argv) == 3:
         destination = sys.argv[2]
@@ -413,5 +414,9 @@ if __name__ == "__main__":
             base = s.fname[:-n]
             for g in files:
                 if g.startswith(base):
-                    shutil.copyfile(os.path.join(local,g), os.path.join(destination,g))
+                    subpath = local.split(basepath)[1]
+                    if not os.path.exists(os.path.join(destination, subpath)):
+                        os.makedirs(os.path.join(destination, subpath))
+
+                    shutil.copyfile(os.path.join(local,g), os.path.join(destination,subpath, g))
                     os.remove(os.path.join(local,g))
