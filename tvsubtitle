@@ -159,7 +159,7 @@ class LegendasTv:
     RE_MATCH_HASH = ".*/download/([^/]*)/.*"
     RE_MATCH_DOWNLOADS = ".*[^\d]+(\d+) downloads.*"
     RE_MATCH_NAME = ".*/download/[^>]*>([^<]*)</a>.*"
-    RE_FIND_REMOTE_NAME = '.*filename="[^\.]*([^"]+).*'
+    RE_FIND_REMOTE_NAME = '.*location: ([^\s]*)\s.*'
 
     def __init__(self, lang):
         self.curl = Curl("http://legendas.tv/")
@@ -201,6 +201,7 @@ class LegendasTv:
 
             result = None
             url = re.findall(LegendasTv.RE_FIND_REMOTE_NAME, self.curl.header(), re.I)[0]
+
             if url.lower().endswith("zip"):
                 result = ZipExtractor(fname)
             elif url.lower().endswith("rar"):
@@ -326,11 +327,11 @@ if __name__ == "__main__":
         MANUAL_MATCH = True
         sys.argv.remove("-m")
 
-    basepath = sys.argv[1]
+    basepath = os.path.abspath(sys.argv[1])
     files = listFiles(basepath)
 
     if len(sys.argv) == 3:
-        destination = sys.argv[2]
+        destination = os.path.abspath(sys.argv[2])
     else:
         destination = None
 
@@ -414,9 +415,19 @@ if __name__ == "__main__":
             base = s.fname[:-n]
             for g in files:
                 if g.startswith(base):
-                    subpath = local.split(basepath)[1]
+                    if local != basepath and basepath in local:
+                        subpath = local.split(basepath)[1]
+                        if subpath[0] == "/":
+                            subpath = subpath[1:]
+                    else:
+                        subpath = ""
                     if not os.path.exists(os.path.join(destination, subpath)):
+                        print os.path.join(destination, subpath)
                         os.makedirs(os.path.join(destination, subpath))
-
-                    shutil.copyfile(os.path.join(local,g), os.path.join(destination,subpath, g))
-                    os.remove(os.path.join(local,g))
+                    try:
+                        shutil.move(os.path.join(local,g), os.path.join(destination,subpath, g))
+                    except Exception as error:
+                        if "Operation not permitted" in error:
+                            os.remove(os.path.join(local,g))
+                        else:
+                            raise error
