@@ -153,7 +153,7 @@ class TvShow:
         self.isTvShow = True
 
 class LegendasTv:
-    SEARCH_URL = "util/carrega_legendas_busca/id_idioma:%s/termo:"
+    SEARCH_URL = "util/carrega_legendas_busca/%s/%s/-:"
     DOWNLOAD_URL = "downloadarquivo/"
     RE_FIND_HASH = '<p><a href="/download/.*?<p class="data">.*?</p>'
     RE_MATCH_HASH = ".*/download/([^/]*)/.*"
@@ -167,8 +167,7 @@ class LegendasTv:
 
     def search(self, name):
         try:
-            data = self.curl.get((LegendasTv.SEARCH_URL % self.lang) + name)
-
+            data = self.curl.get(LegendasTv.SEARCH_URL % (name, self.lang))
             entries = re.findall(LegendasTv.RE_FIND_HASH, data)
             result = []
             for entry in entries:
